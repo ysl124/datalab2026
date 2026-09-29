@@ -19,7 +19,7 @@
  * Difficulty: 1
  */
 int bitAnd(int x, int y) {
-    return 2;
+    return ~((~x) | (~y));
 }
 
 /*
@@ -30,7 +30,7 @@ int bitAnd(int x, int y) {
  *   Difficulty: 1
  */
 int bitXor(int x, int y) {
-    return 2;
+    return (~(x & y)) & ~((~x) & (~y));
 }
 
 /*
@@ -50,7 +50,12 @@ int bitXor(int x, int y) {
  *   1 if x and y have the same sign , 0 otherwise.
  */
 int samesign(int x, int y) {
-    return 2;
+    int a=x>>31;
+    int b=y>>31;
+    int c=!(x && y);
+    if(c && (x ^ b)) return 0;
+    if(c && (a ^ y)) return 0;
+    return !(a ^ b);
 }
 
 /*
@@ -62,8 +67,32 @@ int samesign(int x, int y) {
  *   Max ops: 25
  *   Difficulty: 4
  */
+
+//寻找最高位1的位置
 int logtwo(int v) {
-    return 2;
+    int pos = 0;//记录最高位1的位置
+    int n = 0;
+    n = ((v >> 16) > 0) << 4; //判断最高的16位里面有没有1
+    v = v >> n;
+    pos |= n;
+
+    n = ((v >> 8) > 0) << 3;
+    v = v >> n;
+    pos |= n;
+
+    n = ((v >> 4) > 0) << 2;
+    v = v >> n;
+    pos |= n;
+
+    n = ((v >> 2) > 0) << 1;
+    v = v >> n;
+    pos |= n;
+
+    n = (v >> 1) > 0;
+    v = v >> n;
+    pos |= n;
+    
+    return pos;
 }
 
 /*
@@ -75,20 +104,38 @@ int logtwo(int v) {
  *    Max ops: 17
  *    Difficulty: 2
  */
+
+//构建掩码，提取对应位置的数据，相加
 int byteSwap(int x, int n, int m) {
-    return 2;
+    int count1=n<<3, count2=m<<3;
+    int mask1=0xFF<<(count1);
+    int mask2=0xFF<<(count2);
+    int temp1=x & mask1;
+    int temp2=x & mask2;
+    int mask3=~(mask1|mask2);
+    int temp3=x & mask3;
+    temp1=temp1>>(count1)<<(count2)& mask2;
+    temp2=temp2>>(count2)<<(count1)& mask1;
+    return temp1|temp2|temp3;
 }
 
 /*
  * reverse - Reverse the bit order of a 32-bit unsigned integer.
- *   Example: reverse(0xFFFF0000) = 0x0000FFFF reverse(0x80000000)=0x1 reverse(0xA0000000)=0x5
+ *   Example: reverse() = 0x0000FFFF reverse(0x80000000)=0x1 reverse(0xA0000000)=0x5
  *   Note: You may assume that an unsigned integer is 32 bits long.
  *   Legal ops: << | & - + >> for while ! ~ (You can define unsigned in this function)
  *   Max ops: 30
  *   Difficulty: 3
  */
 unsigned reverse(unsigned v) {
-    return 2;
+    //一位一位移动，相加(并集)
+    unsigned r = 0;
+    int i=32;
+    while(i--)
+    {
+        r = r | (((v >> (i-1)) & 1) << (32 - i));
+    }
+    return r;
 }
 
 /*
@@ -100,7 +147,15 @@ unsigned reverse(unsigned v) {
  *   Difficulty: 3
  */
 int logicalShift(int x, int n) {
-    return 2;
+    // C语言中>>为算数右移
+    /*
+    先做算术右移：x >> n。
+    构造一个与 n 相关的掩码：高 n 位全是 0，低 32-n 位全是 1
+    按位与（&）：(x >> n) & mask。
+    */
+    //“int mask = ~((1 << 31) >> (n-1))”使用了非法的运算符- 以及 n=0会报错
+    int mask = ~(((1 << 31) >> n) << 1);
+    return (x >> n) & mask;
 }
 
 /*
@@ -112,7 +167,28 @@ int logicalShift(int x, int n) {
  *   Difficulty: 4
  */
 int leftBitCount(int x) {
-    return 2;
+    int answer = 0;
+    int n = 0;
+    n = !(~(x >> 16)); //判断最高的16位是否都是1
+    answer += n << 4;
+    x = x << (n << 4);
+
+    n = !(~(x >> 24));
+    answer += n << 3;
+    x = x << (n << 3);
+
+    n = !(~(x >> 28));
+    answer += n << 2;
+    x = x << (n << 2);
+
+    n = !(~(x >> 30));
+    answer += n << 1;
+    x = x << (n << 1);
+
+    answer += (x >> 31) & 1; //最高位
+    answer += ((x >> 31) & 1) & ( (x >> 30) & 1) ;//次高位
+
+    return answer;
 }
 
 /*
@@ -123,8 +199,44 @@ int leftBitCount(int x) {
  *   Max ops: 30
  *   Difficulty: 4
  */
+
+/* 
+提取符号为s
+找到非符号位的最高位的1的位置n，得到frac（处理舍入问题）
+n+=127得到exp
+*/
+
 unsigned float_i2f(int x) {
-    return 2;
+    if(x == 0) return 0;
+    int s = x & 0x80000000;
+    if(s) x=-x;
+
+    int n = 31;
+    while(!(x >> n)) n--;
+
+    int exp = (n+127)<<23;
+    unsigned frac = 0; 
+
+    if(n>23){
+        unsigned lost = x & ((1 << (n - 23)) - 1);
+        frac = x>>(n-23) & 0x7fffff;
+
+        unsigned half = 1 << (n-24);
+        if (lost > half) {
+            frac++;                   
+        } else if (lost == half) {
+            if (frac & 1) frac++;     
+        }
+        
+        if (frac >> 23) {
+            frac = 0;
+            exp += 0x800000;        
+        }
+    } 
+    else {
+        frac = (x << (23 - n)) & 0x7FFFFF;
+    }
+    return s+exp+frac;
 }
 
 /*
@@ -139,7 +251,15 @@ unsigned float_i2f(int x) {
  *   Difficulty: 4
  */
 unsigned floatScale2(unsigned uf) {
-    return 2;
+    unsigned exp = (uf >> 23) & 0xFF;
+
+    if(exp == 0xFF) return uf;
+    else if(exp == 0){
+        return (uf & 0x80000000) + (uf << 1);
+    }
+    else{
+        return uf + (1 << 23);
+    }
 }
 
 /*
@@ -156,7 +276,29 @@ unsigned floatScale2(unsigned uf) {
  *   Difficulty: 3
  */
 int float64_f2i(unsigned uf1, unsigned uf2) {
-    return 2;
+    unsigned s = uf2 >> 31;
+    unsigned exp = (uf2 >> 20) & 0x7ff;
+    int e = exp - 1023;
+
+    if(e < 0) return 0;
+    else if(e >= 31) return 0x80000000;
+    else{
+        unsigned f1 = (uf2 & 0xfffff) + 0x100000;
+        unsigned f2 = uf1;
+        // 需要舍弃的小数位 
+        unsigned shift = 52 - e; 
+        unsigned result;
+    
+        if (shift >= 32) {
+            result = f1 >> (shift - 32);         
+        } 
+        else {
+            result = (f1 << (32 - shift)) | (f2 >> shift);
+        }
+        
+        if (s) return -result;
+        return result;
+    }
 }
 
 /*
@@ -173,5 +315,15 @@ int float64_f2i(unsigned uf1, unsigned uf2) {
  *   Difficulty: 4
  */
 unsigned floatPower2(int x) {
-    return 2;
+    if (x >= 128) {
+        return 0x7F800000; 
+    }
+    
+    if (x <= -127) {
+        if (x >= -149) {
+            return 1 << (x + 149);
+        }
+        return 0; 
+    }
+    return (x + 127) << 23;
 }
